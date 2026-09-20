@@ -1,5 +1,7 @@
 import sharp from "sharp";
 import Image from "../models/image.models.js";
+import fs from "fs/promises";
+import path from "path";
 
 export const uploadImage = async (req, res) => {
   try {
@@ -41,6 +43,101 @@ export const uploadImage = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to upload image",
+    });
+  }
+};
+
+export const resizeImage = async (req, res) => {
+  try {
+    const {imageId} = req.params;
+    const {width, height} = req.body;
+
+    if (!width && !height) {
+      return res.status(400).json({
+        success: false,
+        messsage: "Width or Height is required",
+      });
+    }
+
+    const image = await Image.findById(imageId);
+
+    if (!image) {
+      return res.status(404).json({
+        success: false,
+        message: "Image not found",
+      });
+    }
+
+    const parsedWidth = width ? Number(width) : null;
+    const parsedHeight = height ? Number(height) : null;
+
+    if (
+      (parsedWidth && parsedWidth <= 0) ||
+      (parsedHeight && parsedHeight <= 0)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Width and Height must be greater than zero",
+      });
+    }
+
+    const outputFileName = `resize-${Date.now()}-${image.fileName}`;
+
+    const outPath = path.join("uploads", outputFileName);
+
+    const resizeOptions = {};
+
+    if (parsedWidth) {
+      resizeOptions.width = parsedWidth;
+    }
+    if (parsedHeight) {
+      resizeOptions.height = parsedHeight;
+    }
+
+    await sharp(image.path)
+      .resize({
+        ...resizeOptions,
+        fit: "inside",
+        withoutEnlargement: false,
+      })
+      .toFile(outPath);
+
+    const metadata = await sharp(outPath).metadata();
+
+    const status = await fs.stat(outPath);
+
+    const processedImage = {
+      operation: "resize",
+      fileName: outputFileName,
+      path: outPath,
+      size: status.size,
+      width: metadata.width,
+      height: metadata.height,
+      mimeType: `image/${metadata.format}`,
+    };
+
+    image.processedImage.push(processedImage);
+
+    await image.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Image resized successfully",
+      original: {
+        fileName: image.fileName,
+        size: image.size,
+        width: image.width,
+        height: image.height,
+        mimeType: image.mimeType,
+      },
+      processed: processedImage,
+    });
+  } catch (error) {
+    console.error("Resize image error", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to resize image",
     });
   }
 };

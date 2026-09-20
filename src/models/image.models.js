@@ -30,6 +30,42 @@ const imageSchema = mongoose.Schema(
       type: String,
       required: true,
     },
+    processedImage: [
+      {
+        operation: {
+          type: String,
+          required: true,
+        },
+        fileName: {
+          type: String,
+          required: true,
+        },
+        path: {
+          type: String,
+          required: true,
+        },
+        size: {
+          type: Number,
+          required: true,
+        },
+        width: {
+          type: Number,
+          required: true,
+        },
+        height: {
+          type: Number,
+          required: true,
+        },
+        mimeType: {
+          type: String,
+          required: true,
+        },
+        createdAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
   },
   {
     timestamps: true,

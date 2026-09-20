@@ -7,11 +7,10 @@ const storage = multer.diskStorage({
     cb(null, "uploads/");
   },
   filename: (req, file, cb) => {
-    const uniqueName = `${Date.now}-${crypto.randomBytes(6).toString("hex")}${path.extname(file.originalname)}`;
+    const uniqueName = `${Date.now()}-${crypto.randomBytes(6).toString("hex")}${path.extname(file.originalname)}`;
     cb(null, uniqueName);
   },
 });
-console.log("Hello");
 
 const fileFilter = (req, file, cb) => {
   const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
