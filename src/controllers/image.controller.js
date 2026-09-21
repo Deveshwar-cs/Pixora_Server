@@ -55,7 +55,7 @@ export const resizeImage = async (req, res) => {
     if (!width && !height) {
       return res.status(400).json({
         success: false,
-        messsage: "Width or Height is required",
+        message: "Width or Height is required",
       });
     }
 
@@ -106,6 +106,8 @@ export const resizeImage = async (req, res) => {
 
     const status = await fs.stat(outPath);
 
+    const processedUrl = `http://localhost:${process.env.PORT || 5000}/${outPath.replaceAll("\\", "/")}`;
+
     const processedImage = {
       operation: "resize",
       fileName: outputFileName,
@@ -129,8 +131,9 @@ export const resizeImage = async (req, res) => {
         width: image.width,
         height: image.height,
         mimeType: image.mimeType,
+        url: `http://localhost:${process.env.PORT || 5000}/${image.path}`,
       },
-      processed: processedImage,
+      processed: {...processedImage, url: processedUrl},
     });
   } catch (error) {
     console.error("Resize image error", error);
@@ -138,6 +141,200 @@ export const resizeImage = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to resize image",
+    });
+  }
+};
+
+export const compressImage = async (req, res) => {
+  try {
+    const {imageId} = req.params;
+    const {level = "medium"} = req.body;
+
+    const image = await Image.findById(imageId);
+
+    if (!image) {
+      return res.status(404).json({
+        success: false,
+        message: "Image not found",
+      });
+    }
+
+    const compressionLevels = {
+      low: {
+        quality: 80,
+      },
+
+      medium: {
+        quality: 60,
+      },
+
+      high: {
+        quality: 40,
+      },
+    };
+
+    const compression = compressionLevels[level];
+
+    if (!compression) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid compression level",
+      });
+    }
+
+    const outputFileName = `compress-${Date.now()}-${image.fileName}`;
+
+    const outputPath = path.join("uploads", outputFileName);
+
+    let imageProcessor = sharp(image.path);
+
+    switch (image.mimeType) {
+      case "image/jpeg":
+        imageProcessor = imageProcessor.jpeg({
+          quality: compression.quality,
+          mozjpeg: true,
+        });
+        break;
+
+      case "image/png":
+        imageProcessor = imageProcessor.png({
+          compressionLevel: 9,
+          palette: level === "high",
+          quality: compression.quality,
+        });
+        break;
+
+      case "image/webp":
+        imageProcessor = imageProcessor.webp({
+          quality: compression.quality,
+        });
+        break;
+
+      default:
+        return res.status(400).json({
+          success: false,
+          message: "Unsupported image format",
+        });
+    }
+
+    await imageProcessor.toFile(outputPath);
+
+    const metadata = await sharp(outputPath).metadata();
+
+    const stats = await fs.stat(outputPath);
+
+    const processedImage = {
+      operation: "compress",
+      fileName: outputFileName,
+      path: outputPath,
+      size: stats.size,
+      width: metadata.width,
+      height: metadata.height,
+      mimeType: `image/${metadata.format}`,
+    };
+
+    image.processedImage.push(processedImage);
+
+    await image.save();
+
+    const processedUrl = `http://localhost:${
+      process.env.PORT || 5000
+    }/${outputPath.replaceAll("\\", "/")}`;
+
+    return res.status(200).json({
+      success: true,
+      message: "Image compressed successfully",
+
+      original: {
+        fileName: image.fileName,
+        size: image.size,
+        width: image.width,
+        height: image.height,
+        mimeType: image.mimeType,
+        url: `http://localhost:${process.env.PORT || 5000}/${image.path}`,
+      },
+
+      processed: {
+        ...processedImage,
+        url: processedUrl,
+      },
+    });
+  } catch (error) {
+    console.error("Compress image error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to compress image",
+    });
+  }
+};
+
+export const improveQuality = async (req, res) => {
+  try {
+    const {imageId} = req.params;
+    const image = await Image.findById(imageId);
+    console.log(image);
+    if (!image) {
+      res.json(404).json({
+        success: false,
+        message: "Image not found!",
+      });
+    }
+
+    const outputFileName = `quality-${Date.now()}-${image.fileName}`;
+
+    const outputPath = path.join("uploads", outputFileName);
+    console.log("image.path:", image.path);
+    console.log("outputPath:", outputPath);
+    await sharp(image.path)
+      .sharpen({sigma: 1.2, m1: 1, m2: 2})
+      .toFile(outputPath);
+
+    const metadata = await sharp(outputPath).metadata();
+
+    const stats = await fs.stat(outputPath);
+
+    const processedImage = {
+      operation: "quality",
+      fileName: outputFileName,
+      path: outputPath,
+      size: stats.size,
+      width: metadata.width,
+      height: metadata.height,
+      mimeType: `image/${metadata.format}`,
+    };
+
+    image.processedImage.push(processedImage);
+
+    await image.save();
+
+    const processedUrl = `http://localhost:${
+      process.env.PORT || 5000
+    }/${outputPath.replaceAll("\\", "/")}`;
+
+    return res.status(200).json({
+      success: true,
+      message: "Image quality improved successfully",
+
+      original: {
+        fileName: image.fileName,
+        size: image.size,
+        width: image.width,
+        height: image.height,
+        mimeType: image.mimeType,
+        url: `http://localhost:${process.env.PORT || 5000}/${image.path}`,
+      },
+
+      processed: {
+        ...processedImage,
+        url: processedUrl,
+      },
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({
+      success: false,
+      message: "Unable to Improve quality",
     });
   }
 };
